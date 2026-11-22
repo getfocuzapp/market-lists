@@ -1,0 +1,28 @@
+name: Fetch lists
+on:
+  schedule:
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: lists
+  cancel-in-progress: true
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: node fetch-lists.mjs
+      - name: Publish on the data branch
+        run: |
+          rm -rf /tmp/pub && mkdir /tmp/pub && cp dx-lists.json /tmp/pub/
+          cd /tmp/pub
+          git init -q -b data
+          git config user.name "lists-bot"; git config user.email "bot@users.noreply.github.com"
+          git add dx-lists.json; git commit -qm "lists"
+          git push -q -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" data
