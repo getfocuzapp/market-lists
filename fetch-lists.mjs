@@ -38,5 +38,22 @@ for (const [net, addrs] of Object.entries(byNet)) {
     await sleep(400);
   }
 }
+const WANTED_URL = process.env.WANTED_URL || 'https://coinlook-api.trillionman29.workers.dev/wanted';
+try {
+  const w = await (await fetch(WANTED_URL, { headers: H })).json(); let calls = 0;
+  for (const [net, list] of Object.entries((w && w.w) || {})) {
+    if (!NETS.has(net) || !Array.isArray(list)) continue;
+    const todo = list.filter(a => typeof a === 'string' && /^[A-Za-z0-9]{20,64}$/.test(a) && !out.pairs[net + ':' + (net === 'solana' ? a : a.toLowerCase())]).slice(0, 180);
+    for (let i = 0; i < todo.length && calls < 24; i += 30, calls++) {
+      const chunk = todo.slice(i, i + 30), j = await get('/tokens/v1/' + net + '/' + chunk.join(','), false);
+      if (Array.isArray(j)) {
+        const best = {};
+        for (const p of j) { const t = p && p.baseToken && p.baseToken.address; if (!t) continue; const k = net + ':' + (net === 'solana' ? t : t.toLowerCase()); if (!best[k] || ((p.liquidity && p.liquidity.usd) || 0) > ((best[k].liquidity && best[k].liquidity.usd) || 0)) best[k] = p; }
+        for (const k in best) { const p = best[k]; out.pairs[k] = [{ chainId: p.chainId, dexId: p.dexId, pairAddress: p.pairAddress, baseToken: p.baseToken, quoteToken: p.quoteToken, priceUsd: p.priceUsd, priceNative: p.priceNative, txns: p.txns, volume: p.volume, priceChange: p.priceChange, liquidity: p.liquidity, fdv: p.fdv, marketCap: p.marketCap, pairCreatedAt: p.pairCreatedAt, info: p.info && p.info.imageUrl ? { imageUrl: p.info.imageUrl } : undefined }]; }
+      }
+      await sleep(400);
+    }
+  }
+} catch (e) { console.log('wanted list not read', String(e).slice(0, 80)); }
 writeFileSync('dx-lists.json', JSON.stringify(out));
 console.log('saved', out.profiles.length, out.boostsLatest.length, out.boostsTop.length, 'tokens with details:', Object.keys(out.pairs).length);
